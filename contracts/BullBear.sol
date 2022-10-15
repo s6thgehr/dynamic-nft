@@ -17,12 +17,27 @@ import "@chainlink/contracts/src/v0.8/KeeperCompatible.sol";
 
 // Dev imports. This only works on a local dev network
 // and will not work on any test or main livenets.
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
-contract BullBear is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
+error BullBear__UpkeepNotNeeded();
+
+contract BullBear is
+    ERC721,
+    ERC721Enumerable,
+    ERC721URIStorage,
+    Ownable,
+    KeeperCompatibleInterface
+{
+    event TokensUpdated(string marketTrend);
+
     using Counters for Counters.Counter;
 
     Counters.Counter private _tokenIdCounter;
+
+    uint256 private immutable i_interval;
+    uint256 private s_lastTimestamp;
+    int256 private s_lastPrice;
+    AggregatorV3Interface private immutable i_priceFeed;
 
     // IPFS URIs for the dynamic nft graphics/metadata.
     // NOTE: These connect to my IPFS Companion node.
@@ -38,7 +53,12 @@ contract BullBear is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
         "https://ipfs.io/ipfs/QmbKhBXVWmwrYsTPFYfroR2N7NAekAMxHUVg2CWks7i9qj?filename=simple_bear.json"
     ];
 
-    constructor() ERC721("Bull&Bear", "BBTK") {}
+    constructor(uint256 interval, address priceFeedAddress) ERC721("Bull&Bear", "BBTK") {
+        i_interval = interval;
+        i_priceFeed = AggregatorV3Interface(priceFeedAddress);
+        s_lastTimestamp = block.timestamp;
+        s_lastPrice = getCurrentPrice();
+    }
 
     function safeMint(address to) public {
         // Current counter value will be the minted token's token ID.
@@ -54,12 +74,65 @@ contract BullBear is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
         string memory defaultUri = bullUrisIpfs[0];
         _setTokenURI(tokenId, defaultUri);
 
-        console.log(
-            "DONE!!! minted token ",
-            tokenId,
-            " and assigned token url: ",
-            defaultUri
-        );
+        // console.log("DONE!!! minted token ", tokenId, " and assigned token url: ", defaultUri);
+    }
+
+    function getCurrentPrice() private view returns (int256) {
+        (, int256 price, , , ) = i_priceFeed.latestRoundData();
+        return price;
+    }
+
+    // Chainlink keeper functions
+    function checkUpkeep(
+        bytes memory /*checkData*/
+    )
+        public
+        view
+        override
+        returns (
+            bool upkeepNeeded,
+            bytes memory /*performData*/
+        )
+    {
+        upkeepNeeded = (block.timestamp - s_lastTimestamp) > i_interval;
+        return (upkeepNeeded, "0x0");
+    }
+
+    function performUpkeep(
+        bytes calldata /*performData*/
+    ) external override {
+        (bool upkeepNeeded, ) = checkUpkeep("");
+        if (!upkeepNeeded) {
+            revert BullBear__UpkeepNotNeeded();
+        }
+        s_lastTimestamp = block.timestamp;
+
+        int256 currentPrice = getCurrentPrice();
+
+        if (currentPrice > s_lastPrice) {
+            updateAllTokenUris("bull");
+        }
+
+        if (currentPrice < s_lastPrice) {
+            updateAllTokenUris("bear");
+        }
+    }
+
+    function updateAllTokenUris(string memory trend) internal {
+        if (compareStrings("bear", trend)) {
+            for (uint256 i = 0; i < _tokenIdCounter.current(); i++) {
+                _setTokenURI(i, bearUrisIpfs[0]);
+            }
+        } else {
+            for (uint256 i = 0; i < _tokenIdCounter.current(); i++) {
+                _setTokenURI(i, bullUrisIpfs[0]);
+            }
+        }
+        emit TokensUpdated(trend);
+    }
+
+    function compareStrings(string memory a, string memory b) internal pure returns (bool) {
+        return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
     }
 
     // The following functions are overrides required by Solidity.
@@ -71,10 +144,7 @@ contract BullBear is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
         super._beforeTokenTransfer(from, to, tokenId);
     }
 
-    function _burn(uint256 tokenId)
-        internal
-        override(ERC721, ERC721URIStorage)
-    {
+    function _burn(uint256 tokenId) internal override(ERC721, ERC721URIStorage) {
         super._burn(tokenId);
     }
 
@@ -94,5 +164,17 @@ contract BullBear is ERC721, ERC721Enumerable, ERC721URIStorage, Ownable {
         returns (bool)
     {
         return super.supportsInterface(interfaceId);
+    }
+
+    function getInterval() public view returns (uint256) {
+        return i_interval;
+    }
+
+    function getLastPrice() public view returns (int256) {
+        return s_lastPrice;
+    }
+
+    function getPriceFeed() public view returns (AggregatorV3Interface) {
+        return i_priceFeed;
     }
 }

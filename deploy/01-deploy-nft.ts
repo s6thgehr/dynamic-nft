@@ -10,12 +10,22 @@ const deployBullBear: DeployFunction = async (
     const { deployments, network } = hre;
     const { deploy, log } = deployments;
     const accounts = await ethers.getSigners();
+    let priceFeedAddress: string | undefined;
 
     log("----------------------------------------------------");
     log("Deploying BullBear and waiting for confirmations...");
+
+    if (developmentChains.includes(network.name)) {
+        const mockPriceFeed = await ethers.getContract("MockV3Aggregator");
+        priceFeedAddress = mockPriceFeed.address;
+    } else {
+        priceFeedAddress = networkConfig[network.name].BTCUSDPriceFeedAddress;
+    }
+
+    const interval = networkConfig[network.name].keepersUpdateInterval;
     const bullBear = await deploy("BullBear", {
         from: accounts[0].address,
-        args: [],
+        args: [interval, priceFeedAddress],
         log: true,
         waitConfirmations: networkConfig[network.name].blockConfirmations || 0
     });
