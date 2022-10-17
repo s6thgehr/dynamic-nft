@@ -51,8 +51,15 @@ const deployBullBear: DeployFunction = async (hre: HardhatRuntimeEnvironment) =>
         waitConfirmations: networkConfig[network.name].blockConfirmations || 0
     });
     log(`BullBear deployed at ${bullBear.address}`);
+
+    if (developmentChains.includes(network.name)) {
+        const vrfCoordinatorV2Mock = await ethers.getContract("VRFCoordinatorV2Mock");
+        const bullBearContract = await ethers.getContract("BullBear");
+        vrfCoordinatorV2Mock.addConsumer(subscriptionId, bullBearContract.address);
+    }
+
     if (!developmentChains.includes(network.name) && process.env.ETHERSCAN_API_KEY) {
-        await verify(bullBear.address, []);
+        await verify(bullBear.address, args);
     }
 };
 
