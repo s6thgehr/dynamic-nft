@@ -138,6 +138,9 @@ contract BullBear is
         s_lastTimestamp = block.timestamp;
 
         int256 currentPrice = getCurrentPrice();
+        if (currentPrice == s_lastPrice) {
+            return;
+        }
 
         if (currentPrice > s_lastPrice) {
             currentMarketTrend = MarketTrend.BULL;
@@ -180,9 +183,9 @@ contract BullBear is
         emit RequestFulfilled(_requestId, _randomWords);
     }
 
-    function compareStrings(string memory a, string memory b) internal pure returns (bool) {
-        return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
-    }
+    // function compareStrings(string memory a, string memory b) internal pure returns (bool) {
+    //     return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
+    // }
 
     // The following functions are overrides required by Solidity.
     function _beforeTokenTransfer(

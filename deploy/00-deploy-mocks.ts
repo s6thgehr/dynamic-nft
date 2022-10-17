@@ -15,12 +15,21 @@ const deployMocks: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
         const decimals = networkConfig[network.name].decimals;
         const initialAnswer = networkConfig[network.name].initialAnswer;
 
+        const baseFee = networkConfig[network.name].baseFee;
+        const gasPriceLink = networkConfig[network.name].gasPriceLink;
+
         const mockPriceFeed = await deploy("MockV3Aggregator", {
             from: accounts[0].address,
             args: [decimals, initialAnswer],
             log: true
         });
+        const mockVRFCoordinator = await deploy("VRFCoordinatorV2Mock", {
+            from: accounts[0].address,
+            args: [baseFee, gasPriceLink],
+            log: true
+        });
         log(`MockPriceFeed deployed at ${mockPriceFeed.address}`);
+        log(`MockVRFCoordinator deployed at ${mockVRFCoordinator.address}`);
         log("----------------------------------");
 
         log(
